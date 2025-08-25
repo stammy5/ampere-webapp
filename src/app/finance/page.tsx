@@ -1,0 +1,1218 @@
+'use client'
+
+import { useState, useMemo } from 'react'
+import Link from 'next/link'
+import { useAuth } from '@/contexts/AuthContext'
+import { useFinance } from '@/contexts/FinanceContext'
+import { useClients } from '@/contexts/ClientContext'
+import { useProjects } from '@/contexts/ProjectContext'
+import { usePurchaseOrders } from '@/contexts/PurchaseOrderContext'
+import { useVendors } from '@/contexts/VendorContext'
+import DashboardLayout from '@/components/layout/DashboardLayout'
+import InvoiceForm from '@/components/forms/InvoiceForm'
+import PaymentForm from '@/components/forms/PaymentForm'
+import { Invoice, Payment, InvoiceStatus } from '@/types'
+import { 
+  FileText, Plus, Search, Eye, Edit, Trash2, CreditCard, DollarSign,
+  Clock, AlertTriangle, CheckCircle, TrendingUp, Calendar, Shield, ShoppingCart,
+  ArrowRight
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+const INVOICE_STATUS_COLORS: Record<InvoiceStatus, string> = {
+  draft: 'bg-gray-100 text-gray-800',
+  sent: 'bg-blue-100 text-blue-800',
+  overdue: 'bg-red-100 text-red-800',
+  paid: 'bg-green-100 text-green-800',
+  cancelled: 'bg-red-100 text-red-800'
+}
+
+const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
+  draft: 'Draft', sent: 'Sent', overdue: 'Overdue', paid: 'Paid', cancelled: 'Cancelled'
+}
+
+const PURCHASE_ORDER_STATUS_COLORS: Record<string, string> = {
+  draft: 'bg-gray-100 text-gray-800',
+  pending_approval: 'bg-yellow-100 text-yellow-800',
+  approved: 'bg-blue-100 text-blue-800',
+  sent: 'bg-indigo-100 text-indigo-800',
+  partially_received: 'bg-purple-100 text-purple-800',
+  received: 'bg-green-100 text-green-800',
+  cancelled: 'bg-red-100 text-red-800',
+  closed: 'bg-gray-100 text-gray-800'
+}
+
+const PURCHASE_ORDER_STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  pending_approval: 'Pending Approval',
+  approved: 'Approved',
+  sent: 'Sent',
+  partially_received: 'Partially Received',
+  received: 'Received',
+  cancelled: 'Cancelled',
+  closed: 'Closed'
+}
+
+const VENDOR_INVOICE_STATUS_COLORS: Record<string, string> = {
+  draft: 'bg-gray-100 text-gray-800',
+  sent: 'bg-blue-100 text-blue-800',
+  overdue: 'bg-red-100 text-red-800',
+  paid: 'bg-green-100 text-green-800',
+  cancelled: 'bg-red-100 text-red-800'
+}
+
+const VENDOR_INVOICE_STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft', sent: 'Sent', overdue: 'Overdue', paid: 'Paid', cancelled: 'Cancelled'
+}
+
+export default function FinancePage() {
+  const { user, canAccessFinance, canEditInvoices, canDeleteInvoices, canManagePayments } = useAuth()
+  const { 
+    invoices, payments, vendorInvoices, addInvoice, updateInvoice, deleteInvoice, 
+    addPayment, updatePayment, deletePayment, getInvoicePayments,
+    getOverdueInvoices, getTotalOutstanding, getTotalPaid,
+    getTotalVendorOutstanding, getTotalVendorPaid
+  } = useFinance()
+  const { clients } = useClients()
+  const { projects } = useProjects()
+  const { purchaseOrders } = usePurchaseOrders()
+  const { vendors, getVendor } = useVendors()
+
+  const [activeTab, setActiveTab] = useState<'overview' | 'invoices' | 'payments' | 'purchase-orders' | 'vendor-invoices'>('overview')
+  const [showInvoiceForm, setShowInvoiceForm] = useState(false)
+  const [showPaymentForm, setShowPaymentForm] = useState(false)
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | undefined>()
+  const [editingPayment, setEditingPayment] = useState<Payment | undefined>()
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<InvoiceStatus | 'all'>('all')
+  const [isLoading, setIsLoading] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
+
+  // Create default user object separately to avoid JSX syntax issues
+  const defaultUser = {
+    id: '',
+    name: 'Guest',
+    email: '',
+    role: 'finance' as const,
+    isActive: true,
+    createdAt: new Date(),
+    assignedProjects: [],
+    permissions: {
+      projects: {
+        canViewAllProjects: false,
+        canEditAssignedProjects: false,
+        canCreateProjects: false,
+        canDeleteProjects: false,
+        canManageTeam: false
+      },
+      finance: {
+        canViewFinance: true,
+        canEditInvoices: true,
+        canDeleteInvoices: false,
+        canViewReports: true,
+        canManagePayments: true
+      },
+      clients: {
+        canViewClients: true,
+        canEditClients: false,
+        canCreateClients: false,
+        canDeleteClients: false
+      },
+      system: {
+        canManageUsers: false,
+        canViewAuditLogs: false,
+        canManageSettings: false,
+        canViewReports: true
+      }
+    }
+  }
+
+  // Check finance access permission
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Authentication Required</h1>
+          <p className="text-gray-600">Please log in to access this page.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!canAccessFinance()) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Shield className="h-8 w-8 text-red-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-600 mb-4">
+            You don't have permission to access the Finance module. 
+            This area is restricted to Finance team members, Administrators, and Super Administrators.
+          </p>
+          <p className="text-sm text-gray-500">
+            Current role: <span className="font-medium">{user.role.replace('_', ' ').toUpperCase()}</span>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Calculate financial metrics
+  const metrics = useMemo(() => {
+    const totalOutstanding = getTotalOutstanding()
+    const totalPaid = getTotalPaid()
+    const overdueInvoices = getOverdueInvoices()
+    const totalOverdue = overdueInvoices.reduce((sum, invoice) => sum + invoice.totalAmount, 0)
+    
+    const thisMonth = new Date()
+    const thisMonthInvoices = invoices.filter(invoice => {
+      const invoiceDate = new Date(invoice.issueDate)
+      return invoiceDate.getMonth() === thisMonth.getMonth() && 
+             invoiceDate.getFullYear() === thisMonth.getFullYear()
+    })
+    const thisMonthRevenue = thisMonthInvoices
+      .filter(invoice => invoice.status === 'paid')
+      .reduce((sum, invoice) => sum + invoice.totalAmount, 0)
+
+    // Purchase order metrics
+    const totalPurchaseOrders = purchaseOrders.length
+    const totalPOValue = purchaseOrders.reduce((sum, po) => sum + po.totalAmount, 0)
+    
+    // Vendor invoice metrics
+    const totalVendorOutstanding = getTotalVendorOutstanding()
+    const totalVendorPaid = getTotalVendorPaid()
+    const overdueVendorInvoices = vendorInvoices.filter(vi => {
+      const now = new Date()
+      return vi.status !== 'paid' && 
+             vi.status !== 'cancelled' && 
+             new Date(vi.dueDate) < now
+    })
+    const totalVendorOverdue = overdueVendorInvoices.reduce((sum, vi) => sum + vi.totalAmount, 0)
+
+    return {
+      totalOutstanding, totalPaid, totalOverdue,
+      overdueCount: overdueInvoices.length, thisMonthRevenue,
+      totalInvoices: invoices.length, totalPayments: payments.length,
+      totalPurchaseOrders, totalPOValue,
+      totalVendorOutstanding, totalVendorPaid, totalVendorOverdue,
+      overdueVendorCount: overdueVendorInvoices.length
+    }
+  }, [invoices, payments, getTotalOutstanding, getTotalPaid, getOverdueInvoices, purchaseOrders, vendorInvoices, getTotalVendorOutstanding, getTotalVendorPaid])
+
+  // Filter invoices and payments
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter(invoice => {
+      const client = clients.find(c => c.id === invoice.clientId)
+      const project = projects.find(p => p.id === invoice.projectId)
+      
+      const matchesSearch = !searchTerm || 
+        invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        project?.name.toLowerCase().includes(searchTerm.toLowerCase())
+      
+      const matchesStatus = statusFilter === 'all' || invoice.status === statusFilter
+      return matchesSearch && matchesStatus
+    })
+  }, [invoices, clients, projects, searchTerm, statusFilter])
+
+  const filteredPayments = useMemo(() => {
+    return payments.filter(payment => {
+      const invoice = invoices.find(i => i.id === payment.invoiceId)
+      const client = invoice ? clients.find(c => c.id === invoice.clientId) : null
+      
+      return !searchTerm || 
+        invoice?.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        payment.reference?.toLowerCase().includes(searchTerm.toLowerCase())
+    })
+  }, [payments, invoices, clients, searchTerm])
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-SG', {
+      style: 'currency', currency: 'SGD'
+    }).format(amount)
+  }
+
+  const getClientName = (clientId: string) => {
+    const client = clients.find(c => c.id === clientId)
+    return client?.name || 'Unknown Client'
+  }
+
+  const getProjectName = (projectId?: string) => {
+    if (!projectId) return 'No Project'
+    const project = projects.find(p => p.id === projectId)
+    return project?.name || 'Unknown Project'
+  }
+
+  const getVendorName = (vendorId: string) => {
+    const vendor = vendors.find(v => v.id === vendorId)
+    return vendor?.name || 'Unknown Vendor'
+  }
+
+  // Form handlers
+  const handleCreateInvoice = async (invoiceData: Partial<Invoice>) => {
+    setIsLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      addInvoice(invoiceData)
+      setShowInvoiceForm(false)
+      setSuccessMessage('Invoice created successfully!')
+      setTimeout(() => setSuccessMessage(''), 3000)
+    } catch (error) {
+      console.error('Error creating invoice:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleUpdateInvoice = async (invoiceData: Partial<Invoice>) => {
+    if (!editingInvoice) return
+    setIsLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      updateInvoice(editingInvoice.id, invoiceData)
+      setEditingInvoice(undefined)
+      setSuccessMessage('Invoice updated successfully!')
+      setTimeout(() => setSuccessMessage(''), 3000)
+    } catch (error) {
+      console.error('Error updating invoice:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCreatePayment = async (paymentData: Partial<Payment>) => {
+    setIsLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      addPayment(paymentData)
+      setShowPaymentForm(false)
+      setSuccessMessage('Payment recorded successfully!')
+      setTimeout(() => setSuccessMessage(''), 3000)
+    } catch (error) {
+      console.error('Error recording payment:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleUpdatePayment = async (paymentData: Partial<Payment>) => {
+    if (!editingPayment) return
+    setIsLoading(true)
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      updatePayment(editingPayment.id, paymentData)
+      setEditingPayment(undefined)
+      setSuccessMessage('Payment updated successfully!')
+      setTimeout(() => setSuccessMessage(''), 3000)
+    } catch (error) {
+      console.error('Error updating payment:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleDeleteInvoice = (invoice: Invoice) => {
+    if (confirm(`Are you sure you want to delete invoice ${invoice.invoiceNumber}?`)) {
+      deleteInvoice(invoice.id)
+      setSuccessMessage('Invoice deleted successfully!')
+      setTimeout(() => setSuccessMessage(''), 3000)
+    }
+  }
+
+  const handleDeletePayment = (payment: Payment) => {
+    const invoice = invoices.find(i => i.id === payment.invoiceId)
+    if (confirm(`Are you sure you want to delete this payment for ${invoice?.invoiceNumber}?`)) {
+      deletePayment(payment.id)
+      setSuccessMessage('Payment deleted successfully!')
+      setTimeout(() => setSuccessMessage(''), 3000)
+    }
+  }
+
+  const canEditFinance = canEditInvoices() || canManagePayments()
+  const canDeleteFinance = canDeleteInvoices()
+
+  return (
+    <DashboardLayout user={user || defaultUser}>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Finance Management</h1>
+            <p className="text-gray-600">Manage invoices, payments, and financial reports</p>
+          </div>
+          
+          {canEditFinance && (
+            <div className="flex items-center space-x-3">
+              <button 
+                onClick={() => setShowPaymentForm(true)}
+                className="btn-secondary flex items-center space-x-2"
+              >
+                <CreditCard className="h-4 w-4" />
+                <span>Record Payment</span>
+              </button>
+              <button 
+                onClick={() => setShowInvoiceForm(true)}
+                className="btn-primary flex items-center space-x-2"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Create Invoice</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Success Message */}
+        {successMessage && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <span className="text-green-800 font-medium">{successMessage}</span>
+            </div>
+            <button
+              onClick={() => setSuccessMessage('')}
+              className="text-green-600 hover:text-green-800 p-1 rounded-lg hover:bg-green-100"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* Financial Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="metric-card">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Outstanding</p>
+                <p className="text-2xl font-bold text-orange-600">{formatCurrency(metrics.totalOutstanding)}</p>
+              </div>
+              <Clock className="h-8 w-8 text-orange-600" />
+            </div>
+            <p className="text-sm text-gray-600 mt-1">
+              {invoices.filter(i => i.status !== 'paid' && i.status !== 'cancelled').length} unpaid invoices
+            </p>
+          </div>
+          
+          <div className="metric-card">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Paid</p>
+                <p className="text-2xl font-bold text-green-600">{formatCurrency(metrics.totalPaid)}</p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-600" />
+            </div>
+            <p className="text-sm text-gray-600 mt-1">
+              {metrics.totalPayments} payments received
+            </p>
+          </div>
+          
+          <div className="metric-card">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Overdue</p>
+                <p className="text-2xl font-bold text-red-600">{formatCurrency(metrics.totalOverdue)}</p>
+              </div>
+              <AlertTriangle className="h-8 w-8 text-red-600" />
+            </div>
+            <p className="text-sm text-gray-600 mt-1">
+              {metrics.overdueCount} overdue invoices
+            </p>
+          </div>
+          
+          <div className="metric-card">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">This Month</p>
+                <p className="text-2xl font-bold text-blue-600">{formatCurrency(metrics.thisMonthRevenue)}</p>
+              </div>
+              <Calendar className="h-8 w-8 text-blue-600" />
+            </div>
+            <p className="text-sm text-gray-600 mt-1">
+              {invoices.filter(i => {
+                const invoiceDate = new Date(i.issueDate)
+                const thisMonth = new Date()
+                return invoiceDate.getMonth() === thisMonth.getMonth() && 
+                       invoiceDate.getFullYear() === thisMonth.getFullYear()
+              }).length} invoices this month
+            </p>
+          </div>
+        </div>
+        
+        {/* Vendor Invoice Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="metric-card">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Vendor Outstanding</p>
+                <p className="text-2xl font-bold text-orange-600">{formatCurrency(metrics.totalVendorOutstanding)}</p>
+              </div>
+              <Clock className="h-8 w-8 text-orange-600" />
+            </div>
+            <p className="text-sm text-gray-600 mt-1">
+              {vendorInvoices.filter(vi => vi.status !== 'paid' && vi.status !== 'cancelled').length} unpaid vendor invoices
+            </p>
+          </div>
+          
+          <div className="metric-card">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Vendor Paid</p>
+                <p className="text-2xl font-bold text-green-600">{formatCurrency(metrics.totalVendorPaid)}</p>
+              </div>
+              <CheckCircle className="h-8 w-8 text-green-600" />
+            </div>
+            <p className="text-sm text-gray-600 mt-1">
+              {vendorInvoices.filter(vi => vi.status === 'paid').length} payments made
+            </p>
+          </div>
+          
+          <div className="metric-card">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Vendor Overdue</p>
+                <p className="text-2xl font-bold text-red-600">{formatCurrency(metrics.totalVendorOverdue)}</p>
+              </div>
+              <AlertTriangle className="h-8 w-8 text-red-600" />
+            </div>
+            <p className="text-sm text-gray-600 mt-1">
+              {metrics.overdueVendorCount} overdue vendor invoices
+            </p>
+          </div>
+          
+          <div className="metric-card">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Purchase Orders</p>
+                <p className="text-2xl font-bold text-blue-600">{metrics.totalPurchaseOrders}</p>
+              </div>
+              <ShoppingCart className="h-8 w-8 text-blue-600" />
+            </div>
+            <p className="text-sm text-gray-600 mt-1">
+              {formatCurrency(metrics.totalPOValue)} total value
+            </p>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={cn(
+                "whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm",
+                activeTab === 'overview'
+                  ? "border-ampere-500 text-ampere-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              )}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setActiveTab('invoices')}
+              className={cn(
+                "whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm",
+                activeTab === 'invoices'
+                  ? "border-ampere-500 text-ampere-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              )}
+            >
+              Client Invoices
+            </button>
+            <button
+              onClick={() => setActiveTab('vendor-invoices')}
+              className={cn(
+                "whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm",
+                activeTab === 'vendor-invoices'
+                  ? "border-ampere-500 text-ampere-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              )}
+            >
+              Vendor Invoices
+            </button>
+            <button
+              onClick={() => setActiveTab('payments')}
+              className={cn(
+                "whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm",
+                activeTab === 'payments'
+                  ? "border-ampere-500 text-ampere-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              )}
+            >
+              Payments
+            </button>
+            <button
+              onClick={() => setActiveTab('purchase-orders')}
+              className={cn(
+                "whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm",
+                activeTab === 'purchase-orders'
+                  ? "border-ampere-500 text-ampere-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              )}
+            >
+              Purchase Orders
+            </button>
+          </nav>
+        </div>
+
+        <div className="p-6">
+          {/* Overview Tab */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              {/* Charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Revenue Trend</h3>
+                  <div className="h-64 flex items-center justify-center text-gray-500">
+                    Chart placeholder
+                  </div>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Invoice Status Distribution</h3>
+                  <div className="h-64 flex items-center justify-center text-gray-500">
+                    Chart placeholder
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Activity Sections */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Recent Invoices */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Invoices</h3>
+                  <div className="space-y-3">
+                    {invoices
+                      .sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())
+                      .slice(0, 5)
+                      .map(invoice => (
+                        <div key={invoice.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2">
+                              <p className="font-medium text-gray-900">{invoice.invoiceNumber}</p>
+                              <span className={cn(
+                                "px-2 py-1 text-xs font-medium rounded-full",
+                                INVOICE_STATUS_COLORS[invoice.status]
+                              )}>
+                                {INVOICE_STATUS_LABELS[invoice.status]}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600">{getClientName(invoice.clientId)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium">{formatCurrency(invoice.totalAmount)}</p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(invoice.issueDate).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Recent Payments */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Payments</h3>
+                  <div className="space-y-3">
+                    {payments
+                      .sort((a, b) => new Date(b.receivedDate).getTime() - new Date(a.receivedDate).getTime())
+                      .slice(0, 5)
+                      .map(payment => {
+                        const invoice = invoices.find(i => i.id === payment.invoiceId)
+                        return (
+                          <div key={payment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-900">{invoice?.invoiceNumber}</p>
+                              <p className="text-sm text-gray-600">
+                                {getClientName(invoice?.clientId || '')} • {payment.method}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-medium text-green-600">{formatCurrency(payment.amount)}</p>
+                              <p className="text-xs text-gray-500">
+                                {new Date(payment.receivedDate).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                  </div>
+                </div>
+
+                {/* Recent Purchase Orders */}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Purchase Orders</h3>
+                  <div className="space-y-3">
+                    {purchaseOrders
+                      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                      .slice(0, 5)
+                      .map(po => {
+                        const vendor = getVendor(po.vendorId)
+                        return (
+                          <Link 
+                            key={po.id} 
+                            href={`/finance/purchase-orders/${po.id}`}
+                            className="block"
+                          >
+                            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2">
+                                  <p className="font-medium text-gray-900">{po.poNumber}</p>
+                                  <span className={cn(
+                                    "px-2 py-1 text-xs font-medium rounded-full",
+                                    PURCHASE_ORDER_STATUS_COLORS[po.status]
+                                  )}>
+                                    {PURCHASE_ORDER_STATUS_LABELS[po.status]}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600">{vendor?.name || 'Unknown Vendor'}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-medium">{formatCurrency(po.totalAmount)}</p>
+                                <p className="text-xs text-gray-500">
+                                  {new Date(po.createdAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial Summary */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="metric-card">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Outstanding</p>
+                        <p className="text-2xl font-bold text-orange-600">{formatCurrency(metrics.totalOutstanding)}</p>
+                      </div>
+                      <Clock className="h-8 w-8 text-orange-600" />
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {invoices.filter(i => i.status !== 'paid' && i.status !== 'cancelled').length} unpaid invoices
+                    </p>
+                  </div>
+                  
+                  <div className="metric-card">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Total Paid</p>
+                        <p className="text-2xl font-bold text-green-600">{formatCurrency(metrics.totalPaid)}</p>
+                      </div>
+                      <CheckCircle className="h-8 w-8 text-green-600" />
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {metrics.totalPayments} payments received
+                    </p>
+                  </div>
+                  
+                  <div className="metric-card">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Overdue</p>
+                        <p className="text-2xl font-bold text-red-600">{formatCurrency(metrics.totalOverdue)}</p>
+                      </div>
+                      <AlertTriangle className="h-8 w-8 text-red-600" />
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {metrics.overdueCount} overdue invoices
+                    </p>
+                  </div>
+                  
+                  <div className="metric-card">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">This Month</p>
+                        <p className="text-2xl font-bold text-blue-600">{formatCurrency(metrics.thisMonthRevenue)}</p>
+                      </div>
+                      <TrendingUp className="h-8 w-8 text-blue-600" />
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Revenue received
+                    </p>
+                  </div>
+                </div>
+
+                {/* Overdue Invoices Alert */}
+                {metrics.overdueCount > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-center space-x-3">
+                      <AlertTriangle className="h-5 w-5 text-red-600" />
+                      <div>
+                        <h4 className="font-medium text-red-800">Overdue Invoices</h4>
+                        <p className="text-red-700 text-sm">
+                          You have {metrics.overdueCount} overdue invoices totaling {formatCurrency(metrics.totalOverdue)}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setActiveTab('invoices')
+                          setStatusFilter('overdue')
+                        }}
+                        className="btn-secondary text-red-600 border-red-200 hover:bg-red-100"
+                      >
+                        View Overdue
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Invoices Tab */}
+          {activeTab === 'invoices' && (
+            <div className="space-y-4">
+              {/* Filters */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="relative">
+                    <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search invoices..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-ampere-500 focus:border-ampere-500 min-w-[200px]"
+                    />
+                  </div>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as InvoiceStatus | 'all')}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-ampere-500 focus:border-ampere-500"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="draft">Draft</option>
+                    <option value="sent">Sent</option>
+                    <option value="overdue">Overdue</option>
+                    <option value="paid">Paid</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+                <div className="text-sm text-gray-600">
+                  Showing {filteredInvoices.length} of {invoices.length} invoices
+                </div>
+              </div>
+
+              {/* Invoices Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filteredInvoices.map(invoice => (
+                  <Link
+                    key={invoice.id}
+                    href={`/finance/${invoice.id}`}
+                    className="block group"
+                  >
+                    <div className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-all duration-200 hover:border-ampere-300 relative">
+                      {/* Action buttons - floating to prevent card navigation */}
+                      <div className="absolute top-4 right-4 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        {canEditFinance && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setEditingInvoice(invoice)
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Edit Invoice"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                        )}
+                        {canDeleteFinance && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              handleDeleteInvoice(invoice)
+                            }}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete Invoice"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Invoice Header */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1 pr-8">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <FileText className="h-4 w-4 text-ampere-600" />
+                            <h3 className="font-semibold text-gray-900 group-hover:text-ampere-600 transition-colors">
+                              {invoice.invoiceNumber}
+                            </h3>
+                          </div>
+                          <span className={cn(
+                            "inline-flex px-2 py-1 text-xs font-medium rounded-full",
+                            INVOICE_STATUS_COLORS[invoice.status]
+                          )}>
+                            {INVOICE_STATUS_LABELS[invoice.status]}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Client Information */}
+                      <div className="mb-3">
+                        <p className="text-sm text-gray-600 mb-1">Client</p>
+                        <p className="font-medium text-gray-900">{getClientName(invoice.clientId)}</p>
+                      </div>
+
+                      {/* Project Information */}
+                      {invoice.projectId && (
+                        <div className="mb-3">
+                          <p className="text-sm text-gray-600 mb-1">Project</p>
+                          <p className="text-sm text-gray-900">{getProjectName(invoice.projectId)}</p>
+                        </div>
+                      )}
+
+                      {/* Amount */}
+                      <div className="mb-3">
+                        <p className="text-sm text-gray-600 mb-1">Amount</p>
+                        <p className="text-xl font-bold text-ampere-600">{formatCurrency(invoice.totalAmount)}</p>
+                      </div>
+
+                      {/* Dates */}
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-gray-600 mb-1">Issue Date</p>
+                          <p className="text-gray-900">{new Date(invoice.issueDate).toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600 mb-1">Due Date</p>
+                          <p className={cn(
+                            "font-medium",
+                            invoice.status === 'overdue' ? 'text-red-600' : 'text-gray-900'
+                          )}>
+                            {new Date(invoice.dueDate).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Payment Information */}
+                      {invoice.status === 'paid' && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <div className="flex items-center space-x-2 text-sm text-green-600">
+                            <CheckCircle className="h-4 w-4" />
+                            <span>Payment received</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Overdue indicator */}
+                      {invoice.status === 'overdue' && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <div className="flex items-center space-x-2 text-sm text-red-600">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span>
+                              {Math.ceil((Date.now() - new Date(invoice.dueDate).getTime()) / (1000 * 60 * 60 * 24))} days overdue
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              {filteredInvoices.length === 0 && (
+                <div className="text-center py-12">
+                  <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Invoices Found</h3>
+                  <p className="text-gray-600 mb-4">
+                    {searchTerm || statusFilter !== 'all' 
+                      ? 'Try adjusting your search or filter criteria.'
+                      : 'Start by creating your first invoice.'
+                    }
+                  </p>
+                  {canEditFinance && (!searchTerm && statusFilter === 'all') && (
+                    <button onClick={() => setShowInvoiceForm(true)} className="btn-primary">
+                      Create First Invoice
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Payments Tab */}
+          {activeTab === 'payments' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="relative">
+                  <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search payments..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-ampere-500 focus:border-ampere-500"
+                  />
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Method</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredPayments.map(payment => {
+                      const invoice = invoices.find(i => i.id === payment.invoiceId)
+                      return (
+                        <tr key={payment.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <p className="font-medium text-gray-900">{invoice?.invoiceNumber}</p>
+                            {payment.reference && (
+                              <p className="text-sm text-gray-500">Ref: {payment.reference}</p>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <p className="text-gray-900">{getClientName(invoice?.clientId || '')}</p>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <p className="font-medium text-green-600">{formatCurrency(payment.amount)}</p>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <p className="text-gray-900 capitalize">{payment.method.replace('_', ' ')}</p>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <p className="text-gray-900">{new Date(payment.receivedDate).toLocaleDateString()}</p>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end space-x-2">
+                              {canEditFinance && (
+                                <button
+                                  onClick={() => setEditingPayment(payment)}
+                                  className="text-gray-600 hover:text-gray-900 p-1 rounded-lg hover:bg-gray-100"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                              )}
+                              {canDeleteFinance && (
+                                <button
+                                  onClick={() => handleDeletePayment(payment)}
+                                  className="text-red-600 hover:text-red-900 p-1 rounded-lg hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {filteredPayments.length === 0 && (
+                <div className="text-center py-12">
+                  <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Payments Found</h3>
+                  <p className="text-gray-600 mb-4">
+                    {searchTerm ? 'Try adjusting your search criteria.' : 'No payments have been recorded yet.'}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Purchase Orders Tab */}
+          {activeTab === 'purchase-orders' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Purchase Orders</h3>
+                <button 
+                  onClick={() => {}}
+                  className="btn-primary flex items-center space-x-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Create Purchase Order</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Recent Purchase Orders */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-4">Recent Purchase Orders</h4>
+                  <div className="space-y-3">
+                    {purchaseOrders
+                      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                      .slice(0, 5)
+                      .map(po => {
+                        const vendor = getVendor(po.vendorId)
+                        return (
+                          <Link 
+                            key={po.id} 
+                            href={`/finance/purchase-orders/${po.id}`}
+                            className="block p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="flex items-center space-x-2">
+                                  <p className="font-medium text-gray-900">{po.poNumber}</p>
+                                  <span className={cn(
+                                    "px-2 py-1 text-xs font-medium rounded-full",
+                                    PURCHASE_ORDER_STATUS_COLORS[po.status]
+                                  )}>
+                                    {PURCHASE_ORDER_STATUS_LABELS[po.status]}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600 mt-1">{po.title}</p>
+                                <p className="text-sm text-gray-500">{vendor?.name || 'Unknown Vendor'}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-medium">{formatCurrency(po.totalAmount)}</p>
+                                <p className="text-xs text-gray-500">
+                                  {new Date(po.createdAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Purchase Order Summary */}
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-4">Purchase Order Summary</h4>
+                    <div className="bg-white border border-gray-200 rounded-lg p-6">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center p-4 bg-gray-50 rounded-lg">
+                          <p className="text-2xl font-bold text-gray-900">{purchaseOrders.length}</p>
+                          <p className="text-sm text-gray-600">Total POs</p>
+                        </div>
+                        <div className="text-center p-4 bg-gray-50 rounded-lg">
+                          <p className="text-2xl font-bold text-ampere-600">{formatCurrency(metrics.totalPOValue)}</p>
+                          <p className="text-sm text-gray-600">Total Value</p>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-6">
+                        <h5 className="font-medium text-gray-900 mb-3">By Status</h5>
+                        <div className="space-y-2">
+                          {Array.from(new Set(purchaseOrders.map(po => po.status))).map(status => {
+                            const count = purchaseOrders.filter(po => po.status === status).length
+                            return (
+                              <div key={status} className="flex items-center justify-between">
+                                <span className="text-sm text-gray-600 capitalize">{status.replace('_', ' ')}</span>
+                                <span className="text-sm font-medium">{count}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Vendor Invoices Tab */}
+          {activeTab === 'vendor-invoices' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Vendor Invoices</h3>
+                <Link href="/finance/vendor-invoices" className="btn-primary flex items-center space-x-2">
+                  <span>Manage Vendor Invoices</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Recent Vendor Invoices */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-4">Recent Vendor Invoices</h4>
+                  <div className="space-y-3">
+                    {vendorInvoices
+                      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                      .slice(0, 5)
+                      .map(vi => {
+                        const vendor = vendors.find(v => v.id === vi.vendorId)
+                        return (
+                          <Link 
+                            key={vi.id} 
+                            href={`/finance/vendor-invoices/${vi.id}`}
+                            className="block p-4 bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="flex items-center space-x-2">
+                                  <p className="font-medium text-gray-900">{vi.invoiceNumber}</p>
+                                  <span className={cn(
+                                    "px-2 py-1 text-xs font-medium rounded-full",
+                                    VENDOR_INVOICE_STATUS_COLORS[vi.status]
+                                  )}>
+                                    {VENDOR_INVOICE_STATUS_LABELS[vi.status]}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600 mt-1">{vendor?.name || 'Unknown Vendor'}</p>
+                                <p className="text-sm text-gray-500">{getProjectName(vi.projectId)}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-medium">{formatCurrency(vi.totalAmount)}</p>
+                                <p className="text-xs text-gray-500">
+                                  {new Date(vi.createdAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Vendor Invoice Summary */}
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-4">Vendor Invoice Summary</h4>
+                    <div className="bg-white border border-gray-200 rounded-lg p-6">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center p-4 bg-gray-50 rounded-lg">
+                          <p className="text-2xl font-bold text-gray-900">{vendorInvoices.length}</p>
+                          <p className="text-sm text-gray-600">Total Vendor Invoices</p>
+                        </div>
+                        <div className="text-center p-4 bg-gray-50 rounded-lg">
+                          <p className="text-2xl font-bold text-ampere-600">{formatCurrency(metrics.totalVendorOutstanding)}</p>
+                          <p className="text-sm text-gray-600">Outstanding</p>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-6">
+                        <h5 className="text-sm font-medium text-gray-900 mb-3">Status Distribution</h5>
+                        <div className="space-y-2">
+                          {Object.entries(VENDOR_INVOICE_STATUS_LABELS).map(([status, label]) => {
+                            const count = vendorInvoices.filter(vi => vi.status === status).length
+                            if (count === 0) return null
+                            return (
+                              <div key={status} className="flex items-center justify-between">
+                                <span className="text-sm text-gray-600">{label}</span>
+                                <span className="text-sm font-medium text-gray-900">{count}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </DashboardLayout>
+  )
+}
+
+export default FinancePage
