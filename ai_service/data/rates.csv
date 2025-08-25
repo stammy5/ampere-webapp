@@ -1,0 +1,11 @@
+item,unit,rate,category
+Demolition of brick wall,m2,25.00,Demolition
+Plastering walls,m2,18.50,Finishes
+Laying ceramic tiles,m2,32.00,Finishes
+Installing ceiling boards,m2,22.00,Finishes
+Electrical wiring,m,8.50,Electrical
+Plumbing pipes installation,m,15.00,Plumbing
+Painting walls,m2,12.00,Finishes
+Floor screeding,m2,20.00,Finishes
+Installing kitchen cabinets,set,850.00,Carpentry
+Door installation,no,180.00,Carpentry
