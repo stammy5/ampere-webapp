@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  ai-service:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - API_KEY=your_secret_api_key_here
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - PORT=8000
+      - ENVIRONMENT=production
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  ollama-data:
