@@ -70,6 +70,79 @@ export const mockUsers: User[] = [
 // Username/Email: projects@ampere-eng.com, Password: projects123
 // Username/Email: sales@ampere-eng.com, Password: sales123
 
+// Mock Vendors Data
+export const mockVendors: Vendor[] = [
+  {
+    id: "v001",
+    vendorCode: "AMP-V-001",
+    name: "ABC Construction Supplies",
+    category: "supplier",
+    contactPerson: "John Lim",
+    email: "john@abcconst.com",
+    phone: "+65 6123 4567",
+    address: {
+      street: "123 Jurong West Ave 6",
+      postalCode: "640123",
+      district: "Jurong West"
+    },
+    registrationNumber: "201234567G",
+    gstNumber: "M2-1234567-0",
+    rating: 4.5,
+    certifications: ["ISO 9001"],
+    specializations: ["Building Materials", "Plumbing"],
+    paymentTerms: 30,
+    status: "active",
+    projects: ["p001", "p002"],
+    createdAt: new Date(2023, 0, 10)
+  },
+  {
+    id: "v002",
+    vendorCode: "AMP-V-002",
+    name: "XYZ Electrical Services",
+    category: "subcontractor",
+    contactPerson: "Sarah Tan",
+    email: "sarah@xyzelectric.com",
+    phone: "+65 9876 5432",
+    address: {
+      street: "456 Ang Mo Kio Ave 8",
+      postalCode: "560456",
+      district: "Ang Mo Kio"
+    },
+    registrationNumber: "201876543H",
+    gstNumber: "M2-7654321-0",
+    rating: 4.8,
+    certifications: ["BCA Licensed", "Safety Certification"],
+    specializations: ["Electrical", "Lighting"],
+    paymentTerms: 45,
+    status: "active",
+    projects: ["p001"],
+    createdAt: new Date(2023, 1, 5)
+  },
+  {
+    id: "v003",
+    vendorCode: "AMP-V-003",
+    name: "Best Carpentry Pte Ltd",
+    category: "subcontractor",
+    contactPerson: "Kumar Patel",
+    email: "kumar@bestcarpentry.com",
+    phone: "+65 8765 4321",
+    address: {
+      street: "789 Woodlands Ave 1",
+      postalCode: "730789",
+      district: "Woodlands"
+    },
+    registrationNumber: "201765432J",
+    gstNumber: "M2-9876543-0",
+    rating: 4.2,
+    certifications: [],
+    specializations: ["Carpentry", "Custom Cabinetry"],
+    paymentTerms: 30,
+    status: "active",
+    projects: ["p002"],
+    createdAt: new Date(2023, 2, 15)
+  }
+];
+
 // Mock Projects Data (can be expanded as needed)
 export const mockProjects: Project[] = [
   {
