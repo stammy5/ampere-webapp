@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { Vendor } from '@/types'
-import { mockVendors } from '@/lib/mock-data'
 import { generateNextVendorCode } from '@/lib/vendor-code-generator'
 
 interface VendorContextType {
@@ -29,7 +28,7 @@ interface VendorProviderProps {
 }
 
 export const VendorProvider: React.FC<VendorProviderProps> = ({ children }) => {
-  const [vendors, setVendors] = useState<Vendor[]>(mockVendors)
+  const [vendors, setVendors] = useState<Vendor[]>([])
 
   // Initialize vendors from localStorage if available
   useEffect(() => {
@@ -44,15 +43,13 @@ export const VendorProvider: React.FC<VendorProviderProps> = ({ children }) => {
           setVendors(migratedVendors)
         }
       } else {
-        // Ensure mock vendors have codes
-        const migratedMockVendors = migrateVendorsWithCodes(mockVendors)
-        setVendors(migratedMockVendors)
+        // Initialize with empty array
+        setVendors([])
       }
     } catch (error) {
       console.error('Error loading vendors from localStorage:', error)
-      // Fall back to mock data if there's an error
-      const migratedMockVendors = migrateVendorsWithCodes(mockVendors)
-      setVendors(migratedMockVendors)
+      // Fall back to empty array if there's an error
+      setVendors([])
     }
   }, [])
 
@@ -169,11 +166,11 @@ export const VendorProvider: React.FC<VendorProviderProps> = ({ children }) => {
       if (storedVendors) {
         setVendors(JSON.parse(storedVendors))
       } else {
-        setVendors(mockVendors)
+        setVendors([])
       }
     } catch (error) {
       console.error('Error refreshing vendors:', error)
-      setVendors(mockVendors)
+      setVendors([])
     }
   }
 

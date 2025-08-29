@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { Project, Permit, Milestone, ProjectVendor } from '@/types'
-import { mockProjects } from '@/lib/mock-data'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface ProjectContextType {
@@ -45,7 +44,7 @@ interface ProjectProviderProps {
 }
 
 export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) => {
-  const [projects, setProjects] = useState<Project[]>(mockProjects)
+  const [projects, setProjects] = useState<Project[]>([])
   const { user, getAccessibleProjects } = useAuth()
 
   // Initialize projects from localStorage if available
@@ -61,8 +60,8 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
       }
     } catch (error) {
       console.error('Error loading projects from localStorage:', error)
-      // Fall back to mock data if there's an error
-      setProjects(mockProjects)
+      // Fall back to empty array if there's an error
+      setProjects([])
     }
   }, [])
 
@@ -185,11 +184,11 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
       if (storedProjects) {
         setProjects(JSON.parse(storedProjects))
       } else {
-        setProjects(mockProjects)
+        setProjects([])
       }
     } catch (error) {
       console.error('Error refreshing projects:', error)
-      setProjects(mockProjects)
+      setProjects([])
     }
   }
 

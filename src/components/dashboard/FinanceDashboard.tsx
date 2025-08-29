@@ -12,21 +12,24 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import MetricCard from '@/components/ui/MetricCard'
-import { mockDashboardMetrics, mockQuotations } from '@/lib/mock-data'
 import { formatCurrency } from '@/lib/utils'
 
 export default function FinanceDashboard() {
-  const metrics = mockDashboardMetrics
+  // In production, these would come from API calls or context
+  const metrics = {
+    finance: {
+      totalRevenue: 2450000,
+      outstandingInvoices: 350000,
+      profitMargin: 18.5,
+      cashFlow: 175000
+    }
+  }
   
-  // Calculate recent quotations
-  const recentQuotations = mockQuotations
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 5)
-  
-  // Calculate financial metrics
-  const totalQuotationValue = mockQuotations.reduce((sum, q) => sum + q.totalAmount, 0)
-  const acceptedQuotations = mockQuotations.filter(q => q.status === 'accepted')
-  const pendingQuotations = mockQuotations.filter(q => q.status === 'sent')
+  // In production, these would come from API calls or context
+  const recentQuotations = []
+  const totalQuotationValue = 0
+  const acceptedQuotations = []
+  const pendingQuotations = []
 
   return (
     <div className="space-y-6">

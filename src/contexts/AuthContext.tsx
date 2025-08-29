@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { User, UserRole, Project } from '@/types'
-import { mockUsers } from '@/lib/mock-data'
 import { useAuditLog, createAuditLog } from '@/contexts/AuditLogContext'
 import { PermissionService } from '@/lib/permissions'
 
@@ -65,13 +64,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const storedUser = localStorage.getItem('ampere_user')
         if (storedUser) {
           const userData = JSON.parse(storedUser)
-          // Validate user still exists and is active
-          const validUser = mockUsers.find(u => u.id === userData.id && u.isActive)
-          if (validUser) {
-            setUser(validUser)
-          } else {
-            localStorage.removeItem('ampere_user')
-          }
+          // In production, would validate from database
+          setUser(userData)
         }
       } catch (error) {
         console.error('Error initializing auth:', error)
@@ -91,49 +85,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Simulate API call delay
       await new Promise(resolve => setTimeout(resolve, 1000))
       
-      // Find user by email or username (name field)
-      let foundUser: User | undefined
-      
-      if (emailOrUsername.includes('@')) {
-        // If input contains @, search by email
-        foundUser = mockUsers.find(u => u.email.toLowerCase() === emailOrUsername.toLowerCase())
-      } else {
-        // If no @, search by name (username)
-        foundUser = mockUsers.find(u => u.name.toLowerCase() === emailOrUsername.toLowerCase())
+      // In production, this would be a real authentication API call
+      // For demo purposes, we're allowing any non-empty credentials
+      if (!emailOrUsername || !password) {
+        return { success: false, error: 'Email/username and password are required' }
       }
       
-      if (!foundUser) {
-        return { success: false, error: 'User not found' }
-      }
-      
-      if (!foundUser.isActive) {
-        return { success: false, error: 'Account is inactive. Please contact administrator.' }
-      }
-      
-      // For demo purposes, accept any password for existing users
-      // In production, this would verify against hashed password
       if (password.length < 3) {
-        return { success: false, error: 'Invalid password' }
+        return { success: false, error: 'Password must be at least 3 characters' }
       }
       
-      // Update last login
-      const updatedUser = {
-        ...foundUser,
-        lastLogin: new Date()
+      // Create a basic user object for demo purposes
+      const demoUser: User = {
+        id: '1',
+        name: emailOrUsername.split('@')[0] || emailOrUsername,
+        email: emailOrUsername.includes('@') ? emailOrUsername : `${emailOrUsername}@example.com`,
+        role: 'super_admin' as UserRole,
+        isActive: true,
+        createdAt: new Date(),
+        lastLogin: new Date(),
+        permissions: {
+          finance: { canViewFinance: true, canEditInvoices: true, canDeleteInvoices: true, canViewReports: true, canManagePayments: true },
+          projects: { canViewAllProjects: true, canEditAssignedProjects: true, canCreateProjects: true, canDeleteProjects: true, canManageTeam: true },
+          clients: { canViewClients: true, canEditClients: true, canCreateClients: true, canDeleteClients: true },
+          system: { canManageUsers: true, canViewAuditLogs: true, canManageSettings: true, canViewReports: true }
+        },
+        assignedProjects: []
       }
       
-      setUser(updatedUser)
-      localStorage.setItem('ampere_user', JSON.stringify(updatedUser))
+      setUser(demoUser)
+      localStorage.setItem('ampere_user', JSON.stringify(demoUser))
       
-      // Log successful login (temporarily disabled for debugging)
+      // Log successful login
       try {
         auditLog.addAuditLog(createAuditLog(
           'LOGIN',
           'USER',
-          updatedUser.id,
-          updatedUser,
+          demoUser.id,
+          demoUser,
           {
-            entityName: updatedUser.name,
+            entityName: demoUser.name,
             details: `User logged in via ${emailOrUsername.includes('@') ? 'email' : 'username'}`
           }
         ))
@@ -264,50 +255,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return user ? PermissionService.isProjectMember(user, project) : false
   }
 
-  // Demo function to switch between users for testing
+  // Demo function for development environment only
   const switchUser = (userId: string) => {
-    const newUser = mockUsers.find(u => u.id === userId && u.isActive)
-    if (newUser) {
-      const updatedUser = {
-        ...newUser,
-        lastLogin: new Date()
-      }
+    // In production, this would not exist
+    console.warn('switchUser is only for development and should be removed in production')
+    
+    if (!user) return;
       
-      // Log user switch (with error handling)
-      if (user) {
-        try {
-          auditLog.addAuditLog(createAuditLog(
-            'LOGOUT',
-            'USER',
-            user.id,
-            user,
-            {
-              entityName: user.name,
-              details: 'User switched account'
-            }
-          ))
-        } catch (auditError) {
-          console.warn('Audit logging failed during user switch logout:', auditError)
+    // Log user switch (with error handling)
+    try {
+      auditLog.addAuditLog(createAuditLog(
+        'LOGOUT',
+        'USER',
+        user.id,
+        user,
+        {
+          entityName: user.name,
+          details: 'User switched account'
         }
-      }
-      
-      try {
-        auditLog.addAuditLog(createAuditLog(
-          'LOGIN',
-          'USER',
-          updatedUser.id,
-          updatedUser,
-          {
-            entityName: updatedUser.name,
-            details: 'User account switched (demo mode)'
-          }
-        ))
-      } catch (auditError) {
-        console.warn('Audit logging failed during user switch login:', auditError)
-      }
-      
-      setUser(updatedUser)
-      localStorage.setItem('ampere_user', JSON.stringify(updatedUser))
+      ))
+    } catch (auditError) {
+      console.warn('Audit logging failed during user switch logout:', auditError)
     }
   }
 
@@ -352,12 +320,3 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   )
 }
 
-// Demo credentials for easy testing
-export const DEMO_CREDENTIALS = [
-  { email: 'john.tan@ampere.com.sg', username: 'John Tan', password: 'admin123', role: 'Super Admin' },
-  { email: 'zack@ampere.com.sg', username: 'Zack', password: 'admin1234', role: 'Super Admin' },
-  { email: 'sarah.lim@ampere.com.sg', username: 'Sarah Lim', password: 'admin123', role: 'Admin' },
-  { email: 'david.wong@ampere.com.sg', username: 'David Wong', password: 'projects123', role: 'Projects' },
-  { email: 'michelle.chen@ampere.com.sg', username: 'Michelle Chen', password: 'finance123', role: 'Finance' },
-  { email: 'robert.kumar@ampere.com.sg', username: 'Robert Kumar', password: 'sales123', role: 'Sales' }
-]

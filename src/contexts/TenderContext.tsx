@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { Tender, Document } from '@/types'
-import { mockTenders } from '@/lib/mock-data'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAuditLog, createAuditLog } from '@/contexts/AuditLogContext'
 
@@ -35,7 +34,7 @@ interface TenderProviderProps {
 }
 
 export const TenderProvider: React.FC<TenderProviderProps> = ({ children }) => {
-  const [tenders, setTenders] = useState<Tender[]>(mockTenders)
+  const [tenders, setTenders] = useState<Tender[]>([])
   const { user: currentUser } = useAuth()
   const auditLog = useAuditLog()
 
@@ -52,8 +51,8 @@ export const TenderProvider: React.FC<TenderProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error('Error loading tenders from localStorage:', error)
-      // Fall back to mock data if there's an error
-      setTenders(mockTenders)
+      // Fall back to empty array if there's an error
+      setTenders([])
     }
   }, [])
 

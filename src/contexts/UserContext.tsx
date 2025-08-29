@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { User } from '@/types'
-import { mockUsers } from '@/lib/mock-data'
 
 interface UserContextType {
   users: User[]
@@ -25,7 +24,7 @@ interface UserProviderProps {
 }
 
 export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
-  const [users, setUsers] = useState<User[]>(mockUsers)
+  const [users, setUsers] = useState<User[]>([])
 
   // Initialize users from localStorage if available
   useEffect(() => {
@@ -40,8 +39,8 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error('Error loading users from localStorage:', error)
-      // Fall back to mock data if there's an error
-      setUsers(mockUsers)
+      // Fall back to empty array if there's an error
+      setUsers([])
     }
   }, [])
 
@@ -59,17 +58,17 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   }
 
   const refreshUsers = () => {
-    // Refresh from localStorage or reset to mock data
+    // Refresh from localStorage or reset to empty array
     try {
       const storedUsers = localStorage.getItem('ampere_users')
       if (storedUsers) {
         setUsers(JSON.parse(storedUsers))
       } else {
-        setUsers(mockUsers)
+        setUsers([])
       }
     } catch (error) {
       console.error('Error refreshing users:', error)
-      setUsers(mockUsers)
+      setUsers([])
     }
   }
 

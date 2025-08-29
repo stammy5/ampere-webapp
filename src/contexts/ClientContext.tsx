@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { Client } from '@/types'
-import { mockClients } from '@/lib/mock-data'
 import { generateNextClientCode } from '@/lib/client-code-generator'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAuditLog, createAuditLog } from '@/contexts/AuditLogContext'
@@ -31,7 +30,7 @@ interface ClientProviderProps {
 }
 
 export const ClientProvider: React.FC<ClientProviderProps> = ({ children }) => {
-  const [clients, setClients] = useState<Client[]>(mockClients)
+  const [clients, setClients] = useState<Client[]>([])
   const { user: currentUser } = useAuth()
   const auditLog = useAuditLog()
 
@@ -48,15 +47,13 @@ export const ClientProvider: React.FC<ClientProviderProps> = ({ children }) => {
           setClients(migratedClients)
         }
       } else {
-        // Ensure mock clients have codes
-        const migratedMockClients = migrateClientsWithCodes(mockClients)
-        setClients(migratedMockClients)
+        // Initialize with empty array
+        setClients([])
       }
     } catch (error) {
       console.error('Error loading clients from localStorage:', error)
-      // Fall back to mock data if there's an error
-      const migratedMockClients = migrateClientsWithCodes(mockClients)
-      setClients(migratedMockClients)
+      // Fall back to empty array if there's an error
+      setClients([])
     }
   }, [])
 
@@ -223,11 +220,11 @@ export const ClientProvider: React.FC<ClientProviderProps> = ({ children }) => {
       if (storedClients) {
         setClients(JSON.parse(storedClients))
       } else {
-        setClients(mockClients)
+        setClients([])
       }
     } catch (error) {
       console.error('Error refreshing clients:', error)
-      setClients(mockClients)
+      setClients([])
     }
   }
 

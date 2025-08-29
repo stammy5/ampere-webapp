@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { Invoice, Payment, InvoiceStatus, PaymentMethod, VendorInvoice, VendorInvoiceStatus } from '@/types'
-import { mockInvoices, mockPayments } from '@/lib/mock-data'
 
 interface FinanceContextType {
   invoices: Invoice[]
@@ -53,8 +52,8 @@ interface FinanceProviderProps {
 }
 
 export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) => {
-  const [invoices, setInvoices] = useState<Invoice[]>(mockInvoices)
-  const [payments, setPayments] = useState<Payment[]>(mockPayments)
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [payments, setPayments] = useState<Payment[]>([])
   const [vendorInvoices, setVendorInvoices] = useState<VendorInvoice[]>([])
 
   // Initialize finance data from localStorage if available
@@ -86,8 +85,8 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
       }
     } catch (error) {
       console.error('Error loading finance data from localStorage:', error)
-      setInvoices(mockInvoices)
-      setPayments(mockPayments)
+      setInvoices([])
+      setPayments([])
       setVendorInvoices([])
     }
   }, [])

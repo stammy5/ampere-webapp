@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { Quotation } from '@/types'
-import { mockQuotations } from '@/lib/mock-data'
 
 interface QuotationContextType {
   quotations: Quotation[]
@@ -29,7 +28,7 @@ interface QuotationProviderProps {
 }
 
 export const QuotationProvider: React.FC<QuotationProviderProps> = ({ children }) => {
-  const [quotations, setQuotations] = useState<Quotation[]>(mockQuotations)
+  const [quotations, setQuotations] = useState<Quotation[]>([])
 
   // Initialize quotations from localStorage if available
   useEffect(() => {
@@ -44,8 +43,8 @@ export const QuotationProvider: React.FC<QuotationProviderProps> = ({ children }
       }
     } catch (error) {
       console.error('Error loading quotations from localStorage:', error)
-      // Fall back to mock data if there's an error
-      setQuotations(mockQuotations)
+      // Fall back to empty array if there's an error
+      setQuotations([])
     }
   }, [])
 
@@ -173,11 +172,11 @@ export const QuotationProvider: React.FC<QuotationProviderProps> = ({ children }
       if (storedQuotations) {
         setQuotations(JSON.parse(storedQuotations))
       } else {
-        setQuotations(mockQuotations)
+        setQuotations([])
       }
     } catch (error) {
       console.error('Error refreshing quotations:', error)
-      setQuotations(mockQuotations)
+      setQuotations([])
     }
   }
 
