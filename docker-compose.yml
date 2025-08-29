@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # Frontend Next.js application
+  frontend:
+    image: ampere-webapp:${APP_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+    volumes:
+      - uploads:/app/public/uploads
+      - app_data:/app/data
+    depends_on:
+      - db
+    networks:
+      - ampere_network
+
+  # PostgreSQL Database
+  db:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_DB=${DB_NAME:-ampere_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - ampere_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Database migration service (runs and exits)
+  migrator:
+    image: ampere-webapp:${APP_VERSION:-latest}
+    restart: "no"
+    command: npm run migrate
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - ampere_network
+
+volumes:
+  # Database persistent storage
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${POSTGRES_DATA_PATH:-/volume1/docker/ampere-webapp/postgres_data}
+  # User uploads (images, PDFs, documents)
+  uploads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${UPLOADS_PATH:-/volume1/docker/ampere-webapp/uploads}
+  # Application data (locally stored files, cache, etc.)
+  app_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_PATH:-/volume1/docker/ampere-webapp/app_data}
+
+networks:
+  ampere_network:
+    driver: bridge
